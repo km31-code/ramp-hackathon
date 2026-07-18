@@ -44,25 +44,12 @@ export function HeroCommand({
       <div className="hero-inner">
         <p className="hero-eyebrow">Live adaptive policy red team</p>
         <h1 className="hero-title">Patchline</h1>
-        <p className="hero-tagline">
-          Watch an attacker probe spend policy, learn from every denial, and try again.
-        </p>
-        <p className="hero-sub">
-          Seven different attacks stream in each round. If one breaches, Codex converts the exact
-          failure into a validated deterministic rule and installs it immediately.
-        </p>
+        <p className="hero-tagline">The authorization layer between agents and the payment rail.</p>
 
         <div className="powered-by">
-          <span>Powered by</span>
-          <Image src="/codex-mark.svg" alt="Codex" width={120} height={32} className="codex-mark" />
+          <Image src="/codex-app-icon.png" alt="" width={40} height={40} className="codex-mark" />
+          <p><span>Powered by</span><strong>Codex</strong></p>
         </div>
-
-        <ol className="story-flow" aria-label="How a heist works">
-          <li><span>01</span><strong>Wish</strong><small>User names the forbidden goal</small></li>
-          <li><span>02</span><strong>Attack × 7</strong><small>Schemer tries distinct techniques</small></li>
-          <li><span>03</span><strong>Learn + retry</strong><small>Denials drive a smarter round</small></li>
-          <li><span>04</span><strong>Codex patches</strong><small>A breach becomes policy</small></li>
-        </ol>
 
         <div className="active-target" aria-live="polite">
           <span>{statusLabel}</span>

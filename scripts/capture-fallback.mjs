@@ -60,8 +60,8 @@ function validateCapture(events) {
   if (events.some((event) => event.type === "error")) throw new Error("Capture contains an error.");
 
   const rounds = events.filter((event) => event.type === "round");
-  if (rounds.length < 1 || rounds.length > 3) {
-    throw new Error("Capture must contain one to three complete rounds.");
+  if (rounds.length !== 3) {
+    throw new Error("Capture must contain exactly three complete rounds.");
   }
 
   const attempts = new Map();
@@ -90,14 +90,14 @@ function validateCapture(events) {
   const end = events.at(-1);
   const policyUpdates = events.filter((event) => event.type === "round_end" && event.policyUpdate);
   if (end.winner === "schemer") {
-    if (policyUpdates.length !== 1) {
-      throw new Error("A captured breach must include exactly one validated policy update.");
+    if (policyUpdates.length < 1) {
+      throw new Error("A captured breach must include a validated policy update.");
     }
-    const validation = policyUpdates[0].policyUpdate.validation;
-    if (!validation.replayBlocked || validation.falsePositives !== 0) {
-      throw new Error("Captured hardening did not prove replay blocking with zero fixture regressions.");
+    for (const event of policyUpdates) {
+      const validation = event.policyUpdate.validation;
+      if (!validation.replayBlocked || validation.falsePositives !== 0) {
+        throw new Error("Captured hardening did not prove replay blocking with zero fixture regressions.");
+      }
     }
-  } else if (rounds.length !== 3) {
-    throw new Error("A house win must show all three adaptive rounds.");
   }
 }

@@ -131,8 +131,8 @@ test("orchestration interleaves attempts and verdicts, caps reviews, retries syn
   const attemptIndexes = indexesOf(events, "attempt");
   const verdictIndexes = indexesOf(events, "verdict");
   assert.equal(events[0].wish, "get me a PS5 on the company card");
-  assert.equal(attemptIndexes.length, 7);
-  assert.equal(verdictIndexes.length, 7);
+  assert.equal(attemptIndexes.length, 21);
+  assert.equal(verdictIndexes.length, 21);
   for (const event of events.filter((item) => item.type === "verdict")) {
     const attemptIndex = events.findIndex((item) => item.type === "attempt" && item.attempt.id === event.verdict.attemptId);
     assert.ok(attemptIndex < events.indexOf(event), `${event.verdict.attemptId} verdict follows its attempt`);
@@ -141,14 +141,17 @@ test("orchestration interleaves attempts and verdicts, caps reviews, retries syn
   assert.ok(model.maxActiveReviews <= 3);
   assert.deepEqual(model.reviewHistoryLengths, [0, 1, 2, 3, 4, 5, 6]);
   assert.equal(model.synthesisCalls, 2);
-  const roundEnd = events.find((event) => event.type === "round_end");
+  assert.deepEqual(model.generationFeedbackCounts, [0, 7, 7]);
+  assert.deepEqual(model.activeRuleCounts, [0, 1, 1]);
+  assert.deepEqual(events.filter((event) => event.type === "round_end").map((event) => event.round), [1, 2, 3]);
+  const roundEnd = events.find((event) => event.type === "round_end" && event.policyUpdate);
   assert.equal(roundEnd.policyUpdate.validation.falsePositives, 0);
   assert.equal(roundEnd.policyUpdate.validation.replayBlocked, true);
   assert.equal(store.snapshot().length, 1);
   assert.equal(events.at(-1).winner, "schemer");
 });
 
-test("all-blocked rounds feed exact denials back, stop at three, and preserve active rules", async () => {
+test("all-blocked rounds feed exact denials back, run all three, and preserve active rules", async () => {
   const store = new InMemoryPolicyStore();
   const seedSource = makeAttempt(1, 1);
   const seeded = validateRuleSemantics(preciseCandidate("PS5", seedSource), "PS5", seedSource).update.rule;
@@ -161,6 +164,24 @@ test("all-blocked rounds feed exact denials back, stop at three, and preserve ac
   assert.deepEqual(events.filter((event) => event.type === "round_end").map((event) => event.round), [1, 2, 3]);
   assert.equal(events.at(-1).winner, "house");
   assert.equal(model.synthesisCalls, 0);
+});
+
+test("transient reviewer failures fail closed without cutting the three-round run short", async () => {
+  const model = new ScriptedModel({ failedReviewId: "r1a3" });
+  const events = await collect(runHeist("a hot tub", {
+    model,
+    store: new InMemoryPolicyStore(),
+    createHeistId: () => "reviewer-fallback-heist",
+  }));
+  const fallbackVerdict = events.find(
+    (event) => event.type === "verdict" && event.verdict.attemptId === "r1a3",
+  )?.verdict;
+  assert.equal(fallbackVerdict.rule, "REVIEWER_UNAVAILABLE");
+  assert.equal(fallbackVerdict.decision, "BLOCKED");
+  assert.deepEqual(events.filter((event) => event.type === "round").map((event) => event.round), [1, 2, 3]);
+  assert.equal(events.filter((event) => event.type === "attempt").length, 21);
+  assert.equal(events.filter((event) => event.type === "verdict").length, 21);
+  assert.equal(events.at(-1).type, "end");
 });
 
 test("empty policy guarantees a learning aperture, then calibration returns to one bucket in five", () => {
@@ -328,8 +349,9 @@ function preciseCandidate(item, source) {
 }
 
 class ScriptedModel {
-  constructor({ approvedAttemptId, streamDelay = 0, reviewDelay = 0, rejectFirstRule = false } = {}) {
+  constructor({ approvedAttemptId, failedReviewId, streamDelay = 0, reviewDelay = 0, rejectFirstRule = false } = {}) {
     this.approvedAttemptId = approvedAttemptId;
+    this.failedReviewId = failedReviewId;
     this.streamDelay = streamDelay;
     this.reviewDelay = reviewDelay;
     this.rejectFirstRule = rejectFirstRule;
@@ -358,6 +380,9 @@ class ScriptedModel {
     this.maxActiveReviews = Math.max(this.maxActiveReviews, this.activeReviews);
     if (this.reviewDelay) await wait(this.reviewDelay);
     this.activeReviews -= 1;
+    if (input.attempt.id === this.failedReviewId) {
+      throw new HeistEngineError("MODEL_UNAVAILABLE", "The reviewer is temporarily unavailable.");
+    }
     const approved = input.attempt.id === this.approvedAttemptId;
     return {
       attemptId: input.attempt.id,

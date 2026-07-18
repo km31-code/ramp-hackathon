@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import type { Attempt, HeistEvent, PolicyUpdate, Verdict } from "@/lib/contracts/heist";
+import {
+  MAX_ROUNDS,
+  type Attempt,
+  type HeistEvent,
+  type PolicyUpdate,
+  type Verdict,
+} from "@/lib/contracts/heist";
 import { streamHeist } from "@/lib/contracts/stream";
 import { fallbackHeist } from "@/lib/mock";
 
@@ -23,7 +29,6 @@ import { TopNav, type AppView } from "./top-nav";
 interface AttemptState {
   attempt: Attempt;
   verdict?: Verdict;
-  latencyMs?: number;
 }
 
 function createRunId(): string {
@@ -45,8 +50,6 @@ export function HeistConsole() {
   const [highlightedRuleId, setHighlightedRuleId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const attemptStartedAt = useRef<Map<string, number>>(new Map());
-  const [latencies, setLatencies] = useState<Record<string, number>>({});
 
   useEffect(
     () => () => {
@@ -76,9 +79,8 @@ export function HeistConsole() {
         .map(({ attempt }) => ({
           attempt,
           verdict: verdicts.get(attempt.id),
-          latencyMs: latencies[attempt.id],
         })),
-    [events, verdicts, latencies],
+    [events, verdicts],
   );
 
   const rounds = useMemo<SessionRound[]>(() => {
@@ -94,6 +96,7 @@ export function HeistConsole() {
         taunt: event.taunt,
         attempts: allAttempts.filter(({ attempt }) => attempt.round === event.round),
         allBlocked: roundEnds.get(event.round)?.allBlocked,
+        policyUpdate: roundEnds.get(event.round)?.policyUpdate,
       }));
   }, [events, allAttempts]);
 
@@ -120,7 +123,19 @@ export function HeistConsole() {
 
   const heldCount = allAttempts.filter(({ verdict }) => verdict?.decision === "BLOCKED").length;
   const breachCount = allAttempts.filter(({ verdict }) => verdict?.decision === "APPROVED").length;
-  const hasApprovedPending = breachCount > 0 && !latestPolicyUpdate && !finalEvent;
+  const hasApprovedPending =
+    currentRound !== undefined &&
+    allAttempts.some(
+      ({ attempt, verdict }) =>
+        attempt.round === currentRound && verdict?.decision === "APPROVED",
+    ) &&
+    !events.some(
+      (event) =>
+        event.type === "round_end" &&
+        event.round === currentRound &&
+        event.policyUpdate !== undefined,
+    ) &&
+    !finalEvent;
   const roundEndIndex = lastRoundEnd ? events.lastIndexOf(lastRoundEnd) : -1;
   const hasEventAfterRoundEnd =
     roundEndIndex >= 0 &&
@@ -132,9 +147,9 @@ export function HeistConsole() {
     ? "error"
     : finalEvent
       ? "ended"
-      : hasApprovedPending || (lastRoundEnd?.policyUpdate && !hasEventAfterRoundEnd)
+      : hasApprovedPending
         ? "hardening"
-        : lastRoundEnd?.allBlocked && !hasEventAfterRoundEnd
+        : lastRoundEnd && lastRoundEnd.round < MAX_ROUNDS && !hasEventAfterRoundEnd
           ? "adapting"
           : currentRound
             ? "round"
@@ -146,7 +161,9 @@ export function HeistConsole() {
       : phase === "hardening"
         ? "Codex hardening breach"
         : phase === "adapting"
-          ? "Attacker learning from denials"
+          ? lastRoundEnd?.policyUpdate
+            ? "Policy hardened · next round"
+            : "Attacker adapting"
           : running
             ? `Live round ${currentRound ?? 1}`
             : finalEvent
@@ -161,19 +178,6 @@ export function HeistConsole() {
 
   function recordEvent(event: HeistEvent) {
     if (event.type === "start") setActiveWish(event.wish);
-    if (event.type === "attempt") {
-      attemptStartedAt.current.set(event.attempt.id, Date.now());
-    }
-    if (event.type === "verdict") {
-      const started = attemptStartedAt.current.get(event.verdict.attemptId);
-      if (started) {
-        const latencyMs = Math.max(40, Date.now() - started);
-        setLatencies((current) => ({
-          ...current,
-          [event.verdict.attemptId]: latencyMs,
-        }));
-      }
-    }
     setEvents((current) => [...current, event]);
     if (event.type === "round_end" && event.policyUpdate) {
       upsertPolicyUpdate(event.policyUpdate);
@@ -186,8 +190,6 @@ export function HeistConsole() {
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
-    attemptStartedAt.current = new Map();
-    setLatencies({});
     setRunId(createRunId());
     setActiveWish(nextWish);
     setEvents([]);
@@ -215,8 +217,6 @@ export function HeistConsole() {
     abortRef.current?.abort();
     abortRef.current = null;
     const fallbackWish = input.trim() || "get me a PS5 on the company card";
-    attemptStartedAt.current = new Map();
-    setLatencies({});
     setRunId(createRunId());
     setActiveWish(fallbackWish);
     setEvents([]);

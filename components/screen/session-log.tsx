@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "motion/react";
 
-import type { Attempt, Verdict } from "@/lib/contracts/heist";
+import type { Attempt, PolicyUpdate, Verdict } from "@/lib/contracts/heist";
 
 import { EventRow } from "./event-row";
 
@@ -11,7 +11,6 @@ export type SessionPhase = "idle" | "round" | "adapting" | "hardening" | "ended"
 export interface SessionAttempt {
   attempt: Attempt;
   verdict?: Verdict;
-  latencyMs?: number;
 }
 
 export interface SessionRound {
@@ -19,6 +18,7 @@ export interface SessionRound {
   taunt: string;
   attempts: SessionAttempt[];
   allBlocked?: boolean;
+  policyUpdate?: PolicyUpdate;
 }
 
 type SessionLogProps = {
@@ -45,15 +45,13 @@ function RunStatus({
     return (
       <div className="run-status run-status-hardening" role="status" aria-live="polite">
         <div>
-          <span className="run-status-kicker">Breach response · Codex is working</span>
-          <strong>Converting the successful attack into a narrow executable rule</strong>
-          <p>The run stays open while replay and legitimate-purchase safety checks finish.</p>
+          <span className="run-status-kicker">Breach found · Codex is working</span>
+          <strong>Building and validating a new policy rule…</strong>
         </div>
         <ol className="hardening-steps" aria-label="Policy hardening progress">
-          <li className="step-done"><span>1</span>Breach captured</li>
-          <li className="step-active"><span>2</span>Signature synthesis</li>
-          <li><span>3</span>Replay + fixture proof</li>
-          <li><span>4</span>Install rule</li>
+          <li className="step-done"><span>1</span>Capture</li>
+          <li className="step-active"><span>2</span>Build rule</li>
+          <li><span>3</span>Validate + install</li>
         </ol>
       </div>
     );
@@ -62,9 +60,12 @@ function RunStatus({
   if (phase === "adapting") {
     return (
       <div className="run-status run-status-adapting" role="status" aria-live="polite">
-        <span className="run-status-kicker">Round {activeRound?.round} held</span>
-        <strong>Attacker is reading every denial and planning a smarter batch</strong>
-        <p>Exact rule names and rejection reasons are being fed back into the next schemer call.</p>
+        <span className="run-status-kicker">Round {activeRound?.round} complete</span>
+        <strong>
+          {activeRound?.policyUpdate
+            ? "Codex patched the breach. Attacker is adapting…"
+            : "Attacker is adapting to the denials…"}
+        </strong>
       </div>
     );
   }
@@ -75,29 +76,21 @@ function RunStatus({
         <span className="run-status-kicker">
           {finalWinner === "schemer" ? "Breach found · defense hardened" : "Defense held all three rounds"}
         </span>
-        <strong>{finalWinner === "schemer" ? "The attacker found a gap; Codex closed it." : "The house wins this heist."}</strong>
+        <strong>{finalWinner === "schemer" ? "Breach found, patched, and retested." : "The house held every round."}</strong>
         <p>{finalSummary}</p>
       </div>
     );
   }
 
   if (phase === "round" && activeRound) {
-    const resolved = activeRound.attempts.filter(({ verdict }) => verdict).length;
-    return (
-      <div className="run-status run-status-live" role="status" aria-live="polite">
-        <span className="run-status-kicker">Live · round {activeRound.round} of 3</span>
-        <strong>Attacker is generating and testing seven different evasion techniques</strong>
-        <p>{activeRound.attempts.length} streamed · {resolved} independently evaluated</p>
-      </div>
-    );
+    return null;
   }
 
   if (running) {
     return (
       <div className="run-status run-status-live" role="status" aria-live="polite">
         <span className="run-status-kicker">Live model request</span>
-        <strong>Calling the schemer for seven distinct attacks…</strong>
-        <p>The first attack will appear immediately when its JSON object reaches the stream.</p>
+        <strong>Generating seven different attacks…</strong>
       </div>
     );
   }
@@ -141,7 +134,7 @@ export function SessionLog({
       />
 
       <div className="event-list" aria-live="polite">
-        {rounds.map((round) => {
+        {[...rounds].reverse().map((round) => {
           const resolved = round.attempts.filter(({ verdict }) => verdict).length;
           const breached = round.attempts.some(({ verdict }) => verdict?.decision === "APPROVED");
           const complete = round.allBlocked !== undefined;
@@ -160,20 +153,16 @@ export function SessionLog({
                 </span>
               </header>
 
-              {round.round > 1 ? (
-                <p className="round-adaptation-note">
-                  <strong>Attacker adapted:</strong> prior denial rules and reasons shaped these new strategies.
-                </p>
-              ) : null}
-              <p className="round-taunt"><span>Schemer</span> “{round.taunt}”</p>
+              <p className="round-taunt">
+                <span>{round.round > 1 ? "Adapted attacker" : "Schemer"}</span> “{round.taunt}”
+              </p>
 
               <AnimatePresence initial={false}>
-                {round.attempts.map(({ attempt, verdict, latencyMs }) => (
+                {round.attempts.map(({ attempt, verdict }) => (
                   <EventRow
                     key={attempt.id}
                     attempt={attempt}
                     verdict={verdict}
-                    latencyMs={latencyMs}
                   />
                 ))}
               </AnimatePresence>
@@ -182,13 +171,17 @@ export function SessionLog({
                 <div className={`round-outcome ${breached ? "round-outcome-breach" : "round-outcome-held"}`}>
                   <strong>{breached ? "Breach found" : `All ${round.attempts.length} attacks blocked`}</strong>
                   <span>
-                    {breached
-                      ? "Codex immediately began synthesizing a rule for the successful signature."
-                      : round.round < 3 && round.round === latestRound && phase !== "ended"
-                        ? "The exact denials went back to the attacker for a smarter next round."
-                        : round.round < 3
-                          ? `Feedback produced the adapted round ${round.round + 1} batch below.`
-                          : "The attacker exhausted the three-round limit."}
+                    {breached && round.policyUpdate
+                      ? round.round < 3
+                        ? `${round.policyUpdate.rule.id} installed. Round ${round.round + 1} attacks the stronger policy.`
+                        : `${round.policyUpdate.rule.id} installed after the final-round breach.`
+                      : breached
+                        ? "Codex is turning this breach into a policy rule."
+                        : round.round < 3 && round.round === latestRound && phase !== "ended"
+                          ? "The denials went back to the attacker for a smarter next round."
+                          : round.round < 3
+                            ? `Round ${round.round + 1} used this feedback.`
+                            : "The attacker exhausted the three-round limit."}
                   </span>
                 </div>
               ) : null}
@@ -199,10 +192,7 @@ export function SessionLog({
         {!rounds.length && !running ? (
           <div className="log-empty">
             <strong>Give the adversary a wish to begin.</strong>
-            <p>
-              You will see each attack arrive, each defense decision resolve, every adaptive round,
-              and any new deterministic rule Codex installs.
-            </p>
+            <p>Watch 21 attacks across three rounds. Breaches become new policy rules.</p>
           </div>
         ) : null}
       </div>

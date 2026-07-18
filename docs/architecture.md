@@ -34,7 +34,8 @@ components/screen ──reads──> lib/contracts <──reads── lib/engine
 5. Rule/reviewer evaluation begins immediately. Verdicts may interleave with later attempts and update cards by `attemptId`.
 6. An approval triggers rule synthesis. The server installs only a candidate that blocks the replay and matches zero legitimate fixtures.
 7. The resulting `round_end.policyUpdate` is the proof displayed by the screen.
-8. Exactly one terminal `end` or `error` event unlocks the input.
+8. The next round receives the verdicts and any newly installed rule. Every heist completes three rounds.
+9. Exactly one terminal `end` or `error` event unlocks the input.
 
 The orchestrator races the next schemer chunk against every pending verdict. Rule results resolve
 immediately; passing attempts enter a three-worker reviewer queue. A verdict may arrive before later
@@ -45,7 +46,7 @@ Because the request is a POST, the browser uses a streaming `fetch()` reader rat
 
 ## Runtime modes
 
-- `HEIST_MODE=mock`: compact timed fixture, no API key, normal development default.
+- `HEIST_MODE=mock`: full three-round timed fallback, no API key, normal development default.
 - `HEIST_MODE=live`: real schemer/reviewer/synthesizer execution through the Responses API.
 - Demo fallback: the visible **Demo fallback** control replays `lib/fallback.json` through `lib/mock.ts` without any network request.
 
@@ -53,9 +54,9 @@ The live implementation must keep `OPENAI_API_KEY` server-only. No purchasing or
 
 ## Adaptation and calibration
 
-- All blocked: denial codes and reasons feed the next schemer round, up to three total rounds.
-- Any approved: the earliest approved attempt is promoted, validated, installed, and replayed. The
-  heist ends only after the hardening proof is attached to `round_end`.
+- Every round: verdict codes and reasons feed the next schemer round, for exactly three total rounds.
+- Any approved: the earliest approved attempt is promoted, validated, installed, replayed, and
+  activated before the next round attacks the hardened policy.
 - Later heists in the same process receive installed signatures in the schemer context and rules
   engine. This is signature promotion, not training.
 - `calibration.ts` assigns about 20% of heists a permissive reviewer evidence posture. Deterministic

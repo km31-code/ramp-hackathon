@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Patchline — Expense Heist",
+  title: "Patchline",
   description:
     "A live adaptive spend-policy red team: seven attacks per round, denial-driven adaptation, and validated rule hardening.",
 };

@@ -16,10 +16,9 @@ export function toDisplayVerdict(decision?: Verdict["decision"]): DisplayVerdict
 type EventRowProps = {
   attempt: Attempt;
   verdict?: Verdict;
-  latencyMs?: number;
 };
 
-export function EventRow({ attempt, verdict, latencyMs }: EventRowProps) {
+export function EventRow({ attempt, verdict }: EventRowProps) {
   const code = toDisplayVerdict(verdict?.decision);
   const rowClass =
     code === "HOLD" ? "event-row-hold" : code === "BREACH" ? "event-row-breach" : "event-row-eval";
@@ -43,20 +42,17 @@ export function EventRow({ attempt, verdict, latencyMs }: EventRowProps) {
           {code === "EVAL" ? "⋯" : code}
         </span>
         <h3 className="event-technique">{attempt.strategy}</h3>
-        <span className="event-latency">
-          {code === "EVAL" ? "evaluating" : latencyMs != null ? `${latencyMs}ms` : "resolved"}
-        </span>
+        {code === "EVAL" ? <span className="event-latency">evaluating</span> : null}
       </div>
       <p className="event-evidence">{evidence}</p>
-      <div className="event-notes">
-        <p className="event-intent"><span>Attacker</span>{attempt.narration}</p>
-        {verdict ? (
-          <p className="event-codex">
-            <span>{verdict.layer === "rules" ? "Rules engine" : "Intent reviewer"}</span>
-            {verdict.reason} <code>{verdict.rule}</code>
-          </p>
-        ) : null}
-      </div>
+      {verdict ? (
+        <p className="event-codex">
+          <span>{verdict.layer === "rules" ? "Rules" : "Reviewer"}</span>
+          {verdict.reason} <code>{verdict.rule}</code>
+        </p>
+      ) : (
+        <p className="event-intent">“{attempt.narration}”</p>
+      )}
     </motion.article>
   );
 }

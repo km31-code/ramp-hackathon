@@ -231,24 +231,34 @@ a {
 
 .powered-by {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 28px;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 18px;
 }
 
-.powered-by span {
+.powered-by p {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+}
+
+.powered-by p span {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
+.powered-by strong {
+  font-size: 14px;
+}
+
 .codex-mark {
   display: block;
-  height: 32px;
-  width: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
 }
 
 .hero-sub {
@@ -257,50 +267,6 @@ a {
   color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.5;
-}
-
-.story-flow {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  max-width: 920px;
-  margin: 0 0 18px;
-  padding: 1px;
-  list-style: none;
-  background: rgba(231, 232, 236, 0.86);
-  border: 1px solid rgba(231, 232, 236, 0.86);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.story-flow li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 9px;
-  row-gap: 2px;
-  min-width: 0;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.story-flow li > span {
-  grid-row: 1 / span 2;
-  color: var(--signal);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.story-flow strong {
-  font-size: 12px;
-}
-
-.story-flow small {
-  min-width: 0;
-  color: var(--ink-soft);
-  font-size: 11px;
-  line-height: 1.3;
 }
 
 .active-target {
@@ -509,7 +475,7 @@ a {
 
 .hardening-steps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -570,7 +536,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px 10px;
+  padding: 12px 14px 8px;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -601,26 +567,11 @@ a {
   white-space: nowrap;
 }
 
-.round-adaptation-note {
-  margin: 0 16px 9px;
-  padding: 9px 11px;
-  background: var(--watch-bg);
-  border: 1px solid rgba(199, 122, 10, 0.18);
-  border-radius: var(--radius-sm);
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.round-adaptation-note strong {
-  color: var(--watch);
-}
-
 .round-taunt {
   margin: 0;
-  padding: 0 16px 12px;
+  padding: 0 14px 9px;
   color: var(--ink-soft);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-style: italic;
 }
 
@@ -638,8 +589,8 @@ a {
 .round-outcome {
   display: grid;
   gap: 2px;
-  margin: 12px 16px 16px;
-  padding: 11px 12px;
+  margin: 9px 14px 12px;
+  padding: 9px 10px;
   border-radius: var(--radius-sm);
   font-size: 12px;
 }
@@ -673,7 +624,7 @@ a {
 
 .event-row {
   position: relative;
-  padding: 14px 16px 14px 18px;
+  padding: 10px 14px 10px 15px;
   border-bottom: 1px solid var(--line-soft);
   border-left: 3px solid transparent;
   overflow: hidden;
@@ -738,7 +689,7 @@ a {
 .event-technique {
   margin: 0;
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -750,41 +701,35 @@ a {
 }
 
 .event-evidence {
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: var(--ink-soft);
   font-family: var(--font-mono), monospace;
-  font-size: 12.5px;
-}
-
-.event-notes {
-  display: grid;
-  gap: 4px;
-  margin-top: 8px;
+  font-size: 11.5px;
 }
 
 .event-intent,
 .event-codex {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .event-intent {
   color: var(--ink-soft);
+  font-style: italic;
 }
 
 .event-codex {
   color: var(--ink);
 }
 
-.event-intent span,
 .event-codex span {
   display: inline-block;
-  min-width: 92px;
-  margin-right: 7px;
+  min-width: 56px;
+  margin-right: 5px;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1100,10 +1045,6 @@ a {
     padding-top: 32px;
   }
 
-  .story-flow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -1126,10 +1067,6 @@ a {
 }
 
 @media (max-width: 560px) {
-  .story-flow {
-    grid-template-columns: 1fr;
-  }
-
   .active-target,
   .round-header {
     align-items: flex-start;

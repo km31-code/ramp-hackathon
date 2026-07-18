@@ -12,10 +12,10 @@ The repository includes both a deterministic demo path and the complete live eng
 - Live mode uses the OpenAI Responses API with strict JSON-schema outputs for the schemer, reviewer, and rule synthesizer.
 - The schemer is one streaming model call per round. A bounded JSON parser emits each completed attempt object immediately; reviews run while later attempts are still arriving.
 - The rules layer is deterministic; intent reviews run concurrently with a hard cap of three.
-- Denial feedback drives up to three adaptive rounds inside a 45-second total budget.
+- Every heist runs three adaptive rounds inside a 90-second total budget. Verdicts and newly hardened rules feed the next round.
 - Every approved attempt triggers synthesis. Candidate rules are limited to a fixed grammar, retried once if rejected, replay-tested against the breach, and tested against 12 legitimate purchase fixtures before in-memory installation.
 - One deterministic heist bucket in five uses a permissive semantic evidence posture. It never bypasses hard rules; it leaves a measurable reviewer gap so the house can lose.
-- The screen, API mock, and browser-only fallback all consume the same event contract.
+- The screen, three-round API mock, and browser-only fallback all consume the same event contract.
 - `lib/mock.ts` contains a compact 14-event, 300–600ms UI replay. `lib/fallback.json` contains a full three-round breach-and-hardening replay for venue-wifi or API failures.
 
 ## Quick start
@@ -51,8 +51,8 @@ npm run check
 ```
 
 The capture command refuses mock streams, error streams, incomplete verdicts, and unproven breach
-hardening. A house win must show all three rounds; a schemer win must contain a replay-proven,
-zero-fixture-regression policy update. It replaces the fixture only after the full stream validates.
+hardening. Every capture must show all three rounds; a schemer win must contain at least one
+replay-proven, zero-fixture-regression policy update. It replaces the fixture only after the full stream validates.
 
 Promoted rules live only in the current Node.js process, with a bounded 64-rule store. Restarting or
 moving to another server instance clears them by design; there are no accounts or persistence.

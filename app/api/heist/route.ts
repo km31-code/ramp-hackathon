@@ -3,10 +3,11 @@ import type { HeistEvent } from "@/lib/contracts/heist";
 import { isAbortError, publicErrorMessage } from "@/lib/engine/errors";
 import { runHeist } from "@/lib/engine/heist";
 import { OpenAIHeistModel, liveModelConfigFromEnv } from "@/lib/engine/openai-model";
-import { mockHeist } from "@/lib/mock";
+import { fallbackHeist } from "@/lib/mock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 type HeistMode = "live" | "mock";
 
@@ -57,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
                   model: new OpenAIHeistModel(liveModelConfigFromEnv()),
                   signal: abortController.signal,
                 })
-              : mockHeist(wish);
+              : fallbackHeist(wish, 150);
 
           for await (const event of source) {
             if (!enqueue(event)) break;

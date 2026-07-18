@@ -22,15 +22,6 @@ export function TopNav({ view, onViewChange }: TopNavProps) {
         >
           Console
         </button>
-        <a href="#memory" onClick={() => onViewChange("console")}>
-          Memory
-        </a>
-        <a href="#rules" onClick={() => onViewChange("console")}>
-          Rules
-        </a>
-        <a href="#runs" onClick={() => onViewChange("console")}>
-          Runs
-        </a>
         <button
           type="button"
           aria-current={view === "docs" ? "page" : undefined}

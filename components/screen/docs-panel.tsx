@@ -29,8 +29,8 @@ export function DocsPanel() {
           <li>The user names a forbidden wish.</li>
           <li>The schemer streams seven varied attacks: structuring, misclassification, laundering, bundling, and more.</li>
           <li>Pure deterministic rules catch crude violations; an intent reviewer evaluates the subtler attempts with round history.</li>
-          <li>If all seven fail, every denial rule and reason returns to the schemer for a smarter round, up to three rounds.</li>
-          <li>If an attack is approved, Codex synthesizes a constrained rule, proves the breach replay is blocked, checks legitimate fixtures, and installs the safe rule in memory.</li>
+          <li>Every verdict returns to the schemer for the next of three rounds.</li>
+          <li>If an attack is approved, Codex validates and installs a constrained rule before the next round attacks it.</li>
         </ol>
       </section>
 
@@ -49,7 +49,7 @@ export function DocsPanel() {
             still arriving.
           </li>
           <li>
-            Denial feedback drives up to three adaptive rounds inside a 45-second total budget.
+            Every heist runs three adaptive rounds inside a 90-second total budget.
           </li>
           <li>
             Every approved attempt triggers synthesis, replay proof, and legitimate-fixture checks

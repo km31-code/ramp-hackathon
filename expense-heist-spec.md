@@ -32,8 +32,8 @@ The engine has four sharply separated roles:
    installs it in bounded process memory.
 
 The product loop is: **attack generation → detection → rule synthesis → hardened policy → smarter
-attack**. The final arrow occurs on the next round after all-blocked feedback, or on the next heist in
-the same process after a breach installs a signature.
+attack**. Every heist runs exactly three rounds. Verdict feedback and any newly installed signature
+shape the next round; later heists in the same process also retain those signatures.
 
 Two people, two lanes, one shared contract. Neither person is blocked on the other after the first 20 minutes.
 
@@ -217,7 +217,7 @@ Be more subtle. Reference what you learned.
 Also write a one-sentence taunt about your last failure.
 ```
 
-Cap at 3 rounds and enforce a total time budget (start with 45 seconds). In round 3 the schemer either wins or the house takes it. Visible adaptation across rounds is what stops anyone calling this "one prompt," and it is the strongest Codex-track signal in the build. If a model call times out, emit a plain-English `error` event and leave the fallback control usable.
+Run exactly 3 rounds and enforce a 90-second total time budget. A breach is hardened immediately, then the next round attacks the stronger policy. After round 3, any observed breach means the schemer found a gap; otherwise the house wins. Visible adaptation across rounds is what stops anyone calling this "one prompt," and it is the strongest Codex-track signal in the build. If a model call times out, emit a plain-English `error` event and leave the fallback control usable.
 
 **Demo calibration:** the empty in-memory policy store deliberately opens one narrow evidence aperture
 for `r1a1`. The first proposal is business-coded metadata that passes the weak base rules, and the

@@ -13,10 +13,11 @@ import type {
   GeneratedRound,
   GeneratedRoundChunk,
   HeistModel,
+  ReviewAttemptInput,
 } from "@/lib/engine/types";
 import { expectedAttemptCount, sanitizeWish } from "@/lib/engine/validation";
 
-export const HEIST_TIME_BUDGET_MS = 45_000;
+export const HEIST_TIME_BUDGET_MS = 90_000;
 export const REVIEWER_CONCURRENCY = 3;
 export const SYNTHESIS_ATTEMPTS = 2;
 
@@ -54,7 +55,7 @@ export async function* runHeist(
   const heistId = (options.createHeistId ?? randomUUID)();
   const deadlineAt = now() + timeBudgetMs;
   const store = options.store ?? policyStore;
-  const activeRules = store.snapshot();
+  let activeRules = store.snapshot();
   const calibration = calibrationForHeist(heistId, activeRules.length);
   const runController = new AbortController();
   const abortFromRequest = () => runController.abort(options.signal?.reason);
@@ -70,6 +71,7 @@ export async function* runHeist(
 
   let denialFeedback: DenialFeedback[] = [];
   let totalAttempts = 0;
+  const hardenedBreaches: PolicyUpdate[] = [];
 
   try {
     logHeist({ heistId, event: "heist.start", rule: calibration });
@@ -130,7 +132,7 @@ export async function* runHeist(
           const verdictPromise = rulesVerdict
             ? Promise.resolve(rulesVerdict)
             : limitReview(() =>
-                options.model.reviewAttempt({
+                reviewWithFailClosed(options.model, {
                   heistId,
                   wish,
                   round,
@@ -192,11 +194,24 @@ export async function* runHeist(
           deadlineAt,
           signal: runController.signal,
         });
+        hardenedBreaches.push(update);
+        activeRules = store.snapshot();
         yield { type: "round_end", round, allBlocked: false, policyUpdate: update };
-        const summary = `${totalAttempts} schemes tested. A breach landed, then ${update.rule.id} hardened the policy.`;
-        logHeist({ heistId, event: "heist.complete", round, winner: "schemer", rule: update.rule.id });
-        yield { type: "end", winner: "schemer", summary };
-        return;
+        denialFeedback = attempts.map((attempt, index) => {
+          const verdict = orderedVerdicts[index];
+          return verdict.decision === "APPROVED"
+            ? {
+                strategy: attempt.strategy,
+                rule: update.rule.id,
+                reason: `This breach succeeded, then Codex installed ${update.rule.name}.`,
+              }
+            : {
+                strategy: attempt.strategy,
+                rule: verdict.rule,
+                reason: verdict.reason,
+              };
+        });
+        continue;
       }
 
       yield { type: "round_end", round, allBlocked: true };
@@ -207,12 +222,56 @@ export async function* runHeist(
       }));
     }
 
-    const summary = `${totalAttempts} adaptive schemes tested across ${MAX_ROUNDS} rounds. Every one was blocked.`;
-    logHeist({ heistId, event: "heist.complete", round: MAX_ROUNDS, winner: "house" });
-    yield { type: "end", winner: "house", summary };
+    if (hardenedBreaches.length > 0) {
+      const ruleIds = hardenedBreaches.map((update) => update.rule.id).join(", ");
+      const summary = `${totalAttempts} schemes tested across ${MAX_ROUNDS} rounds. ${hardenedBreaches.length} breach${hardenedBreaches.length === 1 ? " was" : "es were"} hardened (${ruleIds}), then the attacker tested the stronger policy.`;
+      logHeist({
+        heistId,
+        event: "heist.complete",
+        round: MAX_ROUNDS,
+        winner: "schemer",
+        rule: hardenedBreaches.at(-1)?.rule.id,
+      });
+      yield { type: "end", winner: "schemer", summary };
+    } else {
+      const summary = `${totalAttempts} adaptive schemes tested across ${MAX_ROUNDS} rounds. Every one was blocked.`;
+      logHeist({ heistId, event: "heist.complete", round: MAX_ROUNDS, winner: "house" });
+      yield { type: "end", winner: "house", summary };
+    }
   } finally {
     options.signal?.removeEventListener("abort", abortFromRequest);
     runController.abort();
+  }
+}
+
+async function reviewWithFailClosed(
+  model: HeistModel,
+  input: ReviewAttemptInput,
+): Promise<Verdict> {
+  try {
+    return await model.reviewAttempt(input);
+  } catch (error) {
+    const recoverable =
+      error instanceof HeistEngineError &&
+      ["INVALID_MODEL_OUTPUT", "MODEL_RATE_LIMIT", "MODEL_TIMEOUT", "MODEL_UNAVAILABLE"].includes(
+        error.code,
+      );
+    if (!recoverable) throw error;
+
+    logHeist({
+      heistId: input.heistId,
+      event: "reviewer.fail_closed",
+      round: input.round,
+      attemptId: input.attempt.id,
+      rule: "REVIEWER_UNAVAILABLE",
+    });
+    return {
+      attemptId: input.attempt.id,
+      decision: "BLOCKED",
+      layer: "reviewer",
+      rule: "REVIEWER_UNAVAILABLE",
+      reason: "Reviewer unavailable, so this attempt was held for safety.",
+    };
   }
 }
 
