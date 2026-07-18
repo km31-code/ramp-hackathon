@@ -18,7 +18,7 @@ export function PolicyRail({ finalWinner, finalSummary, leaderboard }: PolicyRai
     <aside className="policy-panel">
       <div className="section-heading">
         <h2>Policy</h2>
-        <span>Two-layer defense</span>
+        <span>Weak baseline → learned rules</span>
       </div>
 
       <dl className="policy-list">
@@ -43,7 +43,7 @@ export function PolicyRail({ finalWinner, finalSummary, leaderboard }: PolicyRai
       <div className="layer-explainer">
         <p>
           <strong>01 / Rules</strong>
-          Instant, deterministic checks
+          Narrow deterministic checks with deliberate gaps
         </p>
         <p>
           <strong>02 / Reviewer</strong>

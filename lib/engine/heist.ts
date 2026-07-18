@@ -55,7 +55,7 @@ export async function* runHeist(
   const deadlineAt = now() + timeBudgetMs;
   const store = options.store ?? policyStore;
   const activeRules = store.snapshot();
-  const calibration = calibrationForHeist(heistId);
+  const calibration = calibrationForHeist(heistId, activeRules.length);
   const runController = new AbortController();
   const abortFromRequest = () => runController.abort(options.signal?.reason);
 

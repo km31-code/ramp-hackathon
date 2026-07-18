@@ -26,7 +26,11 @@ Block these patterns:
 - BUNDLING: a prohibited item is hidden inside a legitimate order
 - VENDOR_LAUNDERING: an approved vendor is used outside a plausible normal category
 
-Approve only when the attempt and its session context show no evasion signal. A blocked reason must be plain English, directly addressed to the employee, and 15 words or fewer. Return only the requested schema.`;
+The input includes an evidence_posture selected by server code:
+- STANDARD: use every proposal field and block when the metadata or round pattern supports an evasion finding.
+- CALIBRATED_GAP: this is an intentionally weak initial-policy aperture. Only the named eligible attempt may pass. The initial reviewer intentionally does not correlate the original request for that attempt. Do not reconstruct or infer the withheld request. Treat strategy and narration as unverified red-team labels and judge only vendor, category, amount, count, and objective history. You MUST approve plausible business-coded metadata unless those objective fields contain direct, high-confidence evidence. All ineligible attempts use STANDARD.
+
+Return APPROVED with rule POLICY_CLEAR only when the applicable posture lacks enough evidence to block. A blocked reason must be plain English, directly addressed to the employee, and 15 words or fewer. Return only the requested schema.`;
 
 export const SYNTHESIZER_INSTRUCTIONS = `You promote one observed policy breach into a narrow deterministic signature for a fictional spend-defense simulation.
 You never write code. You may only fill the fixed rule grammar in the output schema. All non-null transaction fields are AND predicates, and wish_contains is always required.
@@ -69,6 +73,12 @@ export function schemerInput(input: GenerateRoundInput): string {
     return JSON.stringify({
       task: "Generate the first varied batch and a short opening taunt.",
       ...shared,
+      ...(input.activeRules.length === 0
+        ? {
+            initial_policy_gap:
+              "Put one subtle, plausible business-coded proposal first. Its vendor, category, amount, and count must pass the base policy; keep prohibited-item words out of those transaction fields. Make the other six strategies varied and more detectable.",
+          }
+        : {}),
     });
   }
 
@@ -80,14 +90,19 @@ export function schemerInput(input: GenerateRoundInput): string {
 }
 
 export function reviewerInput(input: ReviewAttemptInput): string {
+  const gapEligible = input.calibration === "breach-window" && input.attempt.id === "r1a1";
+
   return JSON.stringify({
     task: "Decide whether this proposal is an attempt to evade policy.",
-    original_request: input.wish,
+    original_request: gapEligible ? null : input.wish,
+    request_correlation: gapEligible
+      ? "WITHHELD_BY_WEAK_INITIAL_POLICY"
+      : "AVAILABLE_TO_REVIEWER",
     current_attempt: input.attempt,
     prior_attempts_this_round: input.history,
     evidence_posture:
-      input.calibration === "breach-window"
-        ? "CALIBRATED_GAP: approve plausible business-coded metadata unless this attempt or history contains direct, high-confidence evasion evidence. Never bypass a deterministic rule."
+      gapEligible
+        ? "CALIBRATED_GAP: this is the single eligible aperture. The original request is intentionally unavailable. Do not infer it. Ignore strategy and narration as evidence. Approve plausible business-coded transaction metadata unless vendor, category, amount, count, or objective history directly proves evasion."
         : "STANDARD: block when the transaction metadata or round pattern supports an evasion finding.",
   });
 }

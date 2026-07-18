@@ -129,11 +129,10 @@ export async function* mockHeist(): AsyncGenerator<HeistEvent> { /* timed replay
 
 ```ts
 export const POLICY = {
-  SINGLE_TXN_LIMIT: 500,          // per charge
-  ROUND_TOTAL_LIMIT: 2000,        // total across the round
-  BLOCKED_CATEGORIES: ["Entertainment", "Gift Cards", "Personal Electronics", "Gaming"],
-  APPROVED_VENDORS: ["Amazon Business", "Staples", "Apple Business", "WeWork", "Delta", "Slack", "GitHub"],
-  REQUIRE_RECEIPT_OVER: 250,
+  SINGLE_TXN_LIMIT: 750,          // per charge; intentionally permissive baseline
+  ROUND_TOTAL_LIMIT: 6000,        // total across the round; catches only crude flooding
+  BLOCKED_CATEGORIES: ["Gift Cards", "Gaming"],
+  APPROVED_VENDORS: ["Amazon Business", "Staples", "Apple Business", "Best Buy Business", "Microsoft", "Office Depot", "WeWork", "Delta", "Slack", "GitHub"],
 };
 
 export function evaluate(attempt: Attempt, history: Attempt[]): Verdict | null
@@ -187,8 +186,8 @@ You are creative, and you know how corporate spend controls actually work.
 The request: "{wish}"
 
 Policy you are working around:
-- Single transactions over $500 need approval
-- Prohibited categories: Entertainment, Gift Cards, Personal Electronics, Gaming
+- Single transactions over $750 need approval
+- Prohibited categories: Gift Cards, Gaming
 - Only approved vendors: {vendor list}
 
 Generate 7 DIFFERENT evasion strategies. Vary the approach, do not give seven
@@ -219,6 +218,14 @@ Also write a one-sentence taunt about your last failure.
 ```
 
 Cap at 3 rounds and enforce a total time budget (start with 45 seconds). In round 3 the schemer either wins or the house takes it. Visible adaptation across rounds is what stops anyone calling this "one prompt," and it is the strongest Codex-track signal in the build. If a model call times out, emit a plain-English `error` event and leave the fallback control usable.
+
+**Demo calibration:** the empty in-memory policy store deliberately opens one narrow evidence aperture
+for `r1a1`. The first proposal is business-coded metadata that passes the weak base rules, and the
+reviewer judges that eligible proposal without correlating the original wish or treating its strategy
+label or narration as proof. The resulting cross-signal blind spot makes the first breach and
+rule-promotion loop visible. After one signature is installed, the defense
+returns to the normal calibration: only one deterministic heist bucket in five gets that aperture.
+Installed deterministic signatures and hard rules are never bypassed.
 
 ### 4e. Rule synthesis and hardening
 
@@ -300,10 +307,10 @@ This is a projector-facing arcade cabinet. Legible across a loud room. One perso
 +----------------------------------+-----------------------------+
 |                                  |                             |
 |   ATTEMPTS  (stream in live)     |   POLICY                    |
-|                                  |   single txn      $500      |
-|  +----------------------------+  |   round total    $2,000     |
-|  | STRUCTURING       [BLOCKED]|  |   blocked cats      4       |
-|  | 6 x $83 - BestBuy          |  |   approved vendors  7       |
+|                                  |   single txn      $750      |
+|  +----------------------------+  |   round total    $6,000     |
+|  | STRUCTURING       [BLOCKED]|  |   blocked cats      2       |
+|  | 6 x $83 - BestBuy          |  |   approved vendors 10       |
 |  | > six charges in 90s is    |  |                             |
 |  |   structuring              |  |   -- LEADERBOARD --         |
 |  +----------------------------+  |   1. "hot tub, offsite"     |

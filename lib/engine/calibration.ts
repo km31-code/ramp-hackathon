@@ -1,8 +1,15 @@
 /**
- * One deterministic bucket in five receives a deliberately permissive semantic
- * evidence posture. Hard rules and promoted signatures are never bypassed.
+ * An empty policy store gets one deliberate evidence gap so the first heist can
+ * visibly teach the defense. Once at least one signature is installed, only one
+ * deterministic bucket in five receives that posture. Hard rules and promoted
+ * signatures are never bypassed.
  */
-export function calibrationForHeist(heistId: string): "standard" | "breach-window" {
+export function calibrationForHeist(
+  heistId: string,
+  hardenedRuleCount = 1,
+): "standard" | "breach-window" {
+  if (hardenedRuleCount === 0) return "breach-window";
+
   let hash = 2166136261;
   for (const character of heistId) {
     hash ^= character.codePointAt(0) ?? 0;

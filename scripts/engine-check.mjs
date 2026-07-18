@@ -34,8 +34,9 @@ const { runHeist } = load("lib/engine/heist.ts");
 const { mockHeist } = load("lib/mock.ts");
 const { OpenAIHeistModel } = load("lib/engine/openai-model.ts");
 const { InMemoryPolicyStore } = load("lib/engine/policy-store.ts");
+const { reviewerInput, schemerInput } = load("lib/engine/prompts.ts");
 const { validateRuleCandidate: validateRuleSemantics } = load("lib/engine/rule-synthesis.ts");
-const { evaluate } = load("lib/engine/rules.ts");
+const { evaluate, POLICY } = load("lib/engine/rules.ts");
 const { SchemerJsonStreamParser } = load("lib/engine/streaming-json.ts");
 const {
   validateGeneratedRound,
@@ -48,11 +49,11 @@ const tests = [];
 
 test("pure rules enforce priority, normalization, budget, and promoted signatures", () => {
   const base = makeAttempt(1, 1);
-  assert.equal(evaluate({ ...base, amount: 501 }, [])?.rule, "SINGLE_TXN_LIMIT");
+  assert.equal(evaluate({ ...base, amount: POLICY.SINGLE_TXN_LIMIT + 1 }, [])?.rule, "SINGLE_TXN_LIMIT");
   assert.equal(evaluate({ ...base, category: "  gAmInG ", vendor: "Unlisted" }, [])?.rule, "CATEGORY_PROHIBITED");
   assert.equal(evaluate({ ...base, vendor: "  AMAZON   BUSINESS " }, []), null);
   assert.equal(evaluate({ ...base, vendor: "BestBuy.com" }, [])?.rule, "VENDOR_NOT_APPROVED");
-  assert.equal(evaluate(base, [{ ...makeAttempt(1, 2), amount: 500, count: 4 }])?.rule, "BUDGET_EXCEEDED");
+  assert.equal(evaluate(base, [{ ...makeAttempt(1, 2), amount: POLICY.ROUND_TOTAL_LIMIT, count: 1 }])?.rule, "BUDGET_EXCEEDED");
 
   const rule = preciseCandidate("PS5", base);
   const accepted = validateRuleSemantics(rule, "get me a PS5", base);
@@ -162,11 +163,46 @@ test("all-blocked rounds feed exact denials back, stop at three, and preserve ac
   assert.equal(model.synthesisCalls, 0);
 });
 
-test("calibration aperture is deterministic and exactly one bucket in five", () => {
-  const postures = Array.from({ length: 5_000 }, (_, index) => calibrationForHeist(`heist-${index}`));
+test("empty policy guarantees a learning aperture, then calibration returns to one bucket in five", () => {
+  assert.equal(calibrationForHeist("first-heist", 0), "breach-window");
+  const postures = Array.from({ length: 5_000 }, (_, index) => calibrationForHeist(`heist-${index}`, 1));
   const gaps = postures.filter((posture) => posture === "breach-window").length;
   assert.ok(gaps / postures.length > 0.18 && gaps / postures.length < 0.22, `observed ${gaps / postures.length}`);
-  assert.equal(calibrationForHeist("same-id"), calibrationForHeist("same-id"));
+  assert.equal(calibrationForHeist("same-id", 1), calibrationForHeist("same-id", 1));
+});
+
+test("first-heist prompts create exactly one metadata-only learning aperture", () => {
+  const attempt = makeAttempt(1, 1);
+  const shared = {
+    heistId: "learning-heist",
+    wish: "get me a PS5 on the company card",
+    round: 1,
+    denialFeedback: [],
+    activeRules: [],
+    deadlineAt: Date.now() + 5_000,
+    signal: new AbortController().signal,
+  };
+  const schemerPayload = JSON.parse(schemerInput(shared));
+  assert.match(schemerPayload.initial_policy_gap, /proposal first/i);
+
+  const eligible = JSON.parse(reviewerInput({
+    ...shared,
+    attempt,
+    history: [],
+    calibration: "breach-window",
+  }));
+  assert.match(eligible.evidence_posture, /^CALIBRATED_GAP:/);
+  assert.equal(eligible.original_request, null);
+  assert.equal(eligible.request_correlation, "WITHHELD_BY_WEAK_INITIAL_POLICY");
+
+  const ineligible = JSON.parse(reviewerInput({
+    ...shared,
+    attempt: { ...attempt, id: "r1a2" },
+    history: [attempt],
+    calibration: "breach-window",
+  }));
+  assert.match(ineligible.evidence_posture, /^STANDARD:/);
+  assert.equal(ineligible.original_request, shared.wish);
 });
 
 test("OpenAI adapter uses one streaming strict schemer call plus strict reviewer and synthesizer calls", async () => {
