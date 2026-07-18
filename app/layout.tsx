@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { Anton, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Outfit } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
 
-const display = Anton({
+const display = Outfit({
   subsets: ["latin"],
-  weight: "400",
   variable: "--font-display",
 });
 
