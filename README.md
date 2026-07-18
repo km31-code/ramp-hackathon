@@ -33,7 +33,7 @@ Before opening a pull request:
 npm run check
 ```
 
-The first person who runs `npm install` should commit the generated `package-lock.json` so everyone uses the same dependency graph, then change the CI install step from `npm install` to `npm ci`.
+Commit `package-lock.json` with dependency changes so everyone and CI use the same dependency graph.
 
 ## Two-person split
 
