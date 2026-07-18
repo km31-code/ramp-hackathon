@@ -26,7 +26,7 @@ import {
 } from "@/lib/engine/validation";
 
 const SCHEMER_TIMEOUT_MS = 12_000;
-const REVIEWER_TIMEOUT_MS = 8_000;
+const REVIEWER_TIMEOUT_MS = 20_000;
 const SYNTHESIZER_TIMEOUT_MS = 7_000;
 
 const REVIEWER_RULES = [
