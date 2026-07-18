@@ -1,0 +1,28 @@
+name: Contract or integration task
+description: Shared event types, fixtures, dependencies, CI, or deployment work.
+title: "integration: "
+labels: ["lane: integration"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What shared behavior or workflow changes?
+    validations:
+      required: true
+  - type: textarea
+    id: consumers
+    attributes:
+      label: Producers and consumers
+      description: List every module or person affected by this shared change.
+    validations:
+      required: true
+  - type: checkboxes
+    id: coordination
+    attributes:
+      label: Coordination
+      options:
+        - label: Both builders agreed to this change.
+          required: true
+        - label: The mock fixture and documentation will change with the contract.
+          required: true

@@ -1,0 +1,28 @@
+name: Screen task
+description: Projector UI, interaction, animation, or local leaderboard work.
+title: "screen: "
+labels: ["lane: screen"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What will a walk-up player or spectator see?
+    validations:
+      required: true
+  - type: textarea
+    id: states
+    attributes:
+      label: States covered
+      description: Include pending, success, failure, empty, and reduced-motion states as relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      placeholder: |
+        - [ ] Readable from 15 feet
+        - [ ] Mock stream renders without console errors
+    validations:
+      required: true

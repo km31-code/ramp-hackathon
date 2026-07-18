@@ -1,0 +1,28 @@
+name: Engine task
+description: API, rules, prompts, reviewer, or orchestration work.
+title: "engine: "
+labels: ["lane: engine"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What observable engine behavior will exist when this is done?
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contract impact
+      description: State "none" or list every event/request field affected.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      placeholder: |
+        - [ ] Mock mode still works
+        - [ ] Error path emits a terminal event
+    validations:
+      required: true

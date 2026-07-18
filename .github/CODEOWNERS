@@ -1,0 +1,7 @@
+# Temporary integration owner. Replace lane rules with both real GitHub usernames
+# using docs/ownership.md as soon as the teammate accepts the invitation.
+* @km31-code
+
+/lib/contracts/ @km31-code
+/lib/mock.ts @km31-code
+/.github/ @km31-code

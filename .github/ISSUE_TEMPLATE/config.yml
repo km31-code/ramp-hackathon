@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Build spec
+    url: https://github.com/km31-code/ramp-hackathon/blob/main/expense-heist-spec.md
+    about: Check scope and cut order before proposing a new feature.
