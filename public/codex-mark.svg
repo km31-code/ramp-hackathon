@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 32" fill="none" role="img" aria-label="Codex">
+  <!-- Abstract Codex mark: terminal node + wordmark, not an official OpenAI trademark asset -->
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="#101114"/>
+  <path d="M9 16.5c0-3.6 2.4-6 6-6 2.4 0 4.2 1.1 5.2 2.8l-2.3 1.4c-.6-1-1.6-1.7-2.9-1.7-2 0-3.4 1.5-3.4 3.5s1.4 3.5 3.4 3.5c1.3 0 2.3-.7 2.9-1.7l2.3 1.4c-1 1.7-2.8 2.8-5.2 2.8-3.6 0-6-2.4-6-6Z" fill="#FBFBFC"/>
+  <path d="M22 11h2.2v10H22V11Z" fill="#4E46E8"/>
+  <text x="40" y="22" fill="#101114" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="700" letter-spacing="-0.03em">Codex</text>
+</svg>

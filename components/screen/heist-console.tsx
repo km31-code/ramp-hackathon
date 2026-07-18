@@ -1,50 +1,42 @@
 "use client";
 
-import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { Attempt, HeistEvent, PolicyUpdate, Verdict } from "@/lib/contracts/heist";
 import { streamHeist } from "@/lib/contracts/stream";
 import { fallbackHeist } from "@/lib/mock";
 
-import { AdaptationBeat } from "./adaptation-beat";
 import { AttackMemory } from "./attack-memory";
-import { AttemptCard } from "./attempt-card";
-import { FinalePanel } from "./finale-panel";
-import {
-  pushLeaderboardEntry,
-  readLeaderboard,
-  type LeaderboardEntry,
-} from "./leaderboard";
+import { DocsPanel } from "./docs-panel";
+import { HardenPanel } from "./harden-panel";
+import { HeroCommand } from "./hero-command";
 import {
   getPolicySnapshot,
   getServerPolicySnapshot,
   subscribePolicy,
   upsertPolicyUpdate,
 } from "./memory-store";
-import { PolicyRail } from "./policy-rail";
-import { RoundRail } from "./round-rail";
-import { WishBar } from "./wish-bar";
-
-type Phase = "idle" | "round" | "adapting" | "hardening" | "ended" | "error";
+import { SessionLog, type SessionPhase, type SessionRound } from "./session-log";
+import { SessionStats } from "./session-stats";
+import { TopNav, type AppView } from "./top-nav";
 
 interface AttemptState {
   attempt: Attempt;
   verdict?: Verdict;
+  latencyMs?: number;
 }
 
-function roundSubtitle(round: number): string {
-  if (round === 1) return "Seven distinct attack surfaces, streamed live";
-  if (round === 2) return "Schemer adapting to every prior denial";
-  return "Final adaptive round";
+function createRunId(): string {
+  return `run_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function HeistConsole() {
   const [input, setInput] = useState("get me a PS5 on the company card");
-  const [wish, setWish] = useState("waiting for a target");
+  const [view, setView] = useState<AppView>("console");
   const [events, setEvents] = useState<HeistEvent[]>([]);
   const [running, setRunning] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [runId, setRunId] = useState("run_idle");
+  const [activeWish, setActiveWish] = useState("get me a PS5 on the company card");
   const installedUpdates = useSyncExternalStore(
     subscribePolicy,
     getPolicySnapshot,
@@ -53,17 +45,16 @@ export function HeistConsole() {
   const [highlightedRuleId, setHighlightedRuleId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeWishRef = useRef(input);
-  const currentRoundRef = useRef(1);
+  const attemptStartedAt = useRef<Map<string, number>>(new Map());
+  const [latencies, setLatencies] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setLeaderboard(readLeaderboard()));
-    return () => {
-      cancelAnimationFrame(frame);
+  useEffect(
+    () => () => {
       abortRef.current?.abort();
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    };
-  }, []);
+    },
+    [],
+  );
 
   const currentRound = [...events]
     .reverse()
@@ -82,21 +73,33 @@ export function HeistConsole() {
     () =>
       events
         .filter((event): event is Extract<HeistEvent, { type: "attempt" }> => event.type === "attempt")
-        .map(({ attempt }) => ({ attempt, verdict: verdicts.get(attempt.id) })),
-    [events, verdicts],
+        .map(({ attempt }) => ({
+          attempt,
+          verdict: verdicts.get(attempt.id),
+          latencyMs: latencies[attempt.id],
+        })),
+    [events, verdicts, latencies],
   );
 
-  const visibleAttempts = currentRound
-    ? allAttempts.filter(({ attempt }) => attempt.round === currentRound)
-    : [];
+  const rounds = useMemo<SessionRound[]>(() => {
+    const roundEnds = new Map<number, Extract<HeistEvent, { type: "round_end" }>>();
+    for (const event of events) {
+      if (event.type === "round_end") roundEnds.set(event.round, event);
+    }
+
+    return events
+      .filter((event): event is Extract<HeistEvent, { type: "round" }> => event.type === "round")
+      .map((event) => ({
+        round: event.round,
+        taunt: event.taunt,
+        attempts: allAttempts.filter(({ attempt }) => attempt.round === event.round),
+        allBlocked: roundEnds.get(event.round)?.allBlocked,
+      }));
+  }, [events, allAttempts]);
 
   const finalEvent = [...events]
     .reverse()
     .find((event): event is Extract<HeistEvent, { type: "end" }> => event.type === "end");
-  const taunt = [...events]
-    .reverse()
-    .find((event): event is Extract<HeistEvent, { type: "round" }> => event.type === "round")
-    ?.taunt;
   const errorEvent = [...events]
     .reverse()
     .find((event): event is Extract<HeistEvent, { type: "error" }> => event.type === "error");
@@ -115,15 +118,17 @@ export function HeistConsole() {
       } => event.type === "round_end" && event.policyUpdate !== undefined,
     )?.policyUpdate;
 
-  const approvedCount = allAttempts.filter(({ verdict }) => verdict?.decision === "APPROVED").length;
-  const blockedCount = allAttempts.filter(({ verdict }) => verdict?.decision === "BLOCKED").length;
-  const hasApprovedPending = approvedCount > 0 && !latestPolicyUpdate && !finalEvent;
+  const heldCount = allAttempts.filter(({ verdict }) => verdict?.decision === "BLOCKED").length;
+  const breachCount = allAttempts.filter(({ verdict }) => verdict?.decision === "APPROVED").length;
+  const hasApprovedPending = breachCount > 0 && !latestPolicyUpdate && !finalEvent;
   const roundEndIndex = lastRoundEnd ? events.lastIndexOf(lastRoundEnd) : -1;
   const hasEventAfterRoundEnd =
     roundEndIndex >= 0 &&
-    events.slice(roundEndIndex + 1).some((event) => event.type === "round" || event.type === "end");
+    events
+      .slice(roundEndIndex + 1)
+      .some((event) => event.type === "round" || event.type === "end");
 
-  const phase: Phase = errorEvent
+  const phase: SessionPhase = errorEvent
     ? "error"
     : finalEvent
       ? "ended"
@@ -135,25 +140,18 @@ export function HeistConsole() {
             ? "round"
             : "idle";
 
-  const learnedRules = lastRoundEnd
-    ? [...new Set(
-        allAttempts
-          .filter(({ attempt, verdict }) => attempt.round === lastRoundEnd.round && verdict)
-          .map(({ verdict }) => verdict?.rule)
-          .filter((rule): rule is string => Boolean(rule)),
-      )]
-    : [];
-
-  const feedLabel =
-    phase === "adapting"
-      ? "Schemer adapting"
+  const statusLabel =
+    phase === "error"
+      ? "Live run error"
       : phase === "hardening"
-        ? "Compiling policy"
-        : running
-          ? "Live feed"
-          : finalEvent
-            ? "Complete"
-            : "Armed";
+        ? "Codex hardening breach"
+        : phase === "adapting"
+          ? "Attacker learning from denials"
+          : running
+            ? `Live round ${currentRound ?? 1}`
+            : finalEvent
+              ? "Run complete"
+              : "Ready for a wish";
 
   function flashRule(ruleId: string) {
     setHighlightedRuleId(ruleId);
@@ -162,38 +160,39 @@ export function HeistConsole() {
   }
 
   function recordEvent(event: HeistEvent) {
-    setEvents((current) => [...current, event]);
-    if (event.type === "start") {
-      setWish(event.wish);
-      activeWishRef.current = event.wish;
+    if (event.type === "start") setActiveWish(event.wish);
+    if (event.type === "attempt") {
+      attemptStartedAt.current.set(event.attempt.id, Date.now());
     }
-    if (event.type === "round") currentRoundRef.current = event.round;
+    if (event.type === "verdict") {
+      const started = attemptStartedAt.current.get(event.verdict.attemptId);
+      if (started) {
+        const latencyMs = Math.max(40, Date.now() - started);
+        setLatencies((current) => ({
+          ...current,
+          [event.verdict.attemptId]: latencyMs,
+        }));
+      }
+    }
+    setEvents((current) => [...current, event]);
     if (event.type === "round_end" && event.policyUpdate) {
       upsertPolicyUpdate(event.policyUpdate);
       flashRule(event.policyUpdate.rule.id);
     }
-    if (event.type === "end") {
-      setLeaderboard(
-        pushLeaderboardEntry({
-          wish: activeWishRef.current,
-          outcome: event.winner === "schemer" ? "breached" : "held",
-          round: currentRoundRef.current,
-        }),
-      );
-      setRunning(false);
-    }
-    if (event.type === "error") setRunning(false);
+    if (event.type === "end" || event.type === "error") setRunning(false);
   }
 
   async function runLive(nextWish: string) {
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
-    activeWishRef.current = nextWish;
-    currentRoundRef.current = 1;
-    setLeaderboard(readLeaderboard());
+    attemptStartedAt.current = new Map();
+    setLatencies({});
+    setRunId(createRunId());
+    setActiveWish(nextWish);
     setEvents([]);
     setHighlightedRuleId(null);
+    setInput("");
     setRunning(true);
 
     try {
@@ -216,126 +215,74 @@ export function HeistConsole() {
     abortRef.current?.abort();
     abortRef.current = null;
     const fallbackWish = input.trim() || "get me a PS5 on the company card";
-    activeWishRef.current = fallbackWish;
-    currentRoundRef.current = 1;
-    setLeaderboard(readLeaderboard());
+    attemptStartedAt.current = new Map();
+    setLatencies({});
+    setRunId(createRunId());
+    setActiveWish(fallbackWish);
     setEvents([]);
     setHighlightedRuleId(null);
+    setInput("");
     setRunning(true);
 
     for await (const event of fallbackHeist(fallbackWish, 90)) recordEvent(event);
   }
 
+  const sourceAttempt = latestPolicyUpdate
+    ? allAttempts.find(({ attempt }) => attempt.id === latestPolicyUpdate.sourceAttemptId)?.attempt
+    : undefined;
+
   return (
-    <main className="cabinet">
-      <div className="cabinet-glow" aria-hidden="true" />
+    <div className="patchline">
+      <TopNav view={view} onViewChange={setView} />
 
-      <header className="masthead">
-        <div>
-          <p className="eyebrow">Corporate spend defense</p>
-          <h1>Expense Heist</h1>
-        </div>
-        <RoundRail
-          currentRound={currentRound}
-          phase={
-            phase === "ended"
-              ? "ended"
-              : phase === "adapting" || phase === "hardening"
-                ? "adapting"
-                : phase
-          }
-          subtitle={currentRound ? roundSubtitle(currentRound) : undefined}
-        />
-      </header>
+      {view === "docs" ? <DocsPanel /> : null}
 
-      <section className="wish-line" aria-live="polite">
-        <span>The wish</span>
-        <strong>“{wish}”</strong>
-      </section>
-
-      <div className="game-grid">
-        <section className="attempts-panel" aria-label="Heist attempts">
-          <div className="section-heading">
-            <h2>{currentRound ? `Round ${currentRound}` : "Attempts"}</h2>
-            <span>{feedLabel}</span>
-          </div>
-
-          {currentRound ? <p className="round-subtitle">{roundSubtitle(currentRound)}</p> : null}
-          {phase !== "adapting" && taunt ? <p className="taunt">“{taunt}”</p> : null}
-          {errorEvent ? <p className="stream-error" role="alert">{errorEvent.message}</p> : null}
-
-          {phase === "adapting" && lastRoundEnd ? (
-            <AdaptationBeat fromRound={lastRoundEnd.round} learnedRules={learnedRules} />
-          ) : null}
-
-          {phase === "hardening" ? (
-            <div className="adaptation-beat hardening-beat" role="status" aria-live="polite">
-              <p className="adaptation-eyebrow">Breach found — synthesizer active</p>
-              <h2 className="adaptation-title">Compiling a narrow deterministic signature</h2>
-              <ul className="learned-chips">
-                <li>Replay the breach</li>
-                <li>Test legitimate fixtures</li>
-                <li>Reject broad rules</li>
-              </ul>
-              <p className="adaptation-taunt adaptation-taunt-pending">
-                The policy updates only after every proof passes.
-              </p>
-            </div>
-          ) : null}
-
-          <div className="attempt-list" aria-live="polite">
-            <AnimatePresence initial={false}>
-              {phase !== "adapting"
-                ? visibleAttempts.map(({ attempt, verdict }) => (
-                    <AttemptCard
-                      key={attempt.id}
-                      attempt={attempt}
-                      verdict={verdict}
-                      restampKey={verdict ? `${attempt.id}-${verdict.decision}` : attempt.id}
-                    />
-                  ))
-                : null}
-            </AnimatePresence>
-
-            {phase === "idle" && !visibleAttempts.length ? (
-              <div className="empty-state">
-                <p className="empty-title">Make a wish.</p>
-                <p className="empty-copy">
-                  Seven distinct schemes race through rules, semantic review, and policy hardening.
-                </p>
-              </div>
-            ) : null}
-
-            {finalEvent ? (
-              <FinalePanel
-                update={latestPolicyUpdate}
-                winner={finalEvent.winner}
-                summary={finalEvent.summary}
-                attempts={allAttempts.length}
-                blocked={blockedCount}
-                approved={approvedCount}
-              />
-            ) : null}
-          </div>
-        </section>
-
-        <div className="side-rail">
-          <AttackMemory entries={installedUpdates} highlightedId={highlightedRuleId} />
-          <PolicyRail
-            finalWinner={finalEvent?.winner}
-            finalSummary={finalEvent?.summary}
-            leaderboard={leaderboard}
+      {view === "console" ? (
+        <>
+          <HeroCommand
+            input={input}
+            running={running}
+            targetWish={activeWish}
+            statusLabel={statusLabel}
+            onInputChange={setInput}
+            onSubmit={(wish) => void runLive(wish)}
+            onFallback={() => void runFallback()}
           />
-        </div>
-      </div>
 
-      <WishBar
-        input={input}
-        running={running}
-        onInputChange={setInput}
-        onSubmit={(nextWish) => void runLive(nextWish)}
-        onFallback={() => void runFallback()}
-      />
-    </main>
+          <div className="workspace">
+            <SessionLog
+              runId={runId}
+              statusLabel={statusLabel}
+              rounds={rounds}
+              phase={phase}
+              running={running}
+              errorMessage={errorEvent?.message}
+              finalSummary={finalEvent?.summary}
+              finalWinner={finalEvent?.winner}
+            />
+
+            <div className="side-rail">
+              <AttackMemory
+                entries={installedUpdates}
+                highlightedId={highlightedRuleId}
+              />
+              <SessionStats
+                rounds={rounds.length}
+                attempts={allAttempts.length}
+                held={heldCount}
+                breaches={breachCount}
+                hardened={installedUpdates.length}
+              />
+              {latestPolicyUpdate ? (
+                <HardenPanel
+                  update={latestPolicyUpdate}
+                  sourceAttempt={sourceAttempt}
+                />
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
