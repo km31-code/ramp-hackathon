@@ -7,42 +7,42 @@ import type { PolicyUpdate } from "@/lib/contracts/heist";
 type AttackMemoryProps = {
   entries: PolicyUpdate[];
   highlightedId?: string | null;
+  runId?: string;
 };
 
-export function AttackMemory({ entries, highlightedId }: AttackMemoryProps) {
+export function AttackMemory({ entries, highlightedId, runId }: AttackMemoryProps) {
   return (
-    <aside className="memory-panel" aria-label="Hardened policy signatures">
-      <div className="section-heading">
-        <h2>Hardened Policy</h2>
-        <span>{entries.length ? `${entries.length} installed` : "Baseline"}</span>
+    <aside className="panel rail-block" id="memory" aria-label="Attack memory">
+      <div className="panel-header">
+        <h2>Attack Memory</h2>
+        <span className="panel-meta">{entries.length}</span>
       </div>
 
       {entries.length === 0 ? (
         <div className="memory-empty">
-          <p className="memory-empty-title">No promoted signatures yet</p>
+          <p className="memory-empty-title">No patterns learned</p>
           <p className="memory-empty-copy">
-            A successful attack becomes a narrow executable rule after validation.
+            When a breach is validated, Codex stores a narrow signature here.
           </p>
         </div>
       ) : (
         <ul className="memory-list">
           <AnimatePresence initial={false}>
-            {entries.map((entry) => {
+            {[...entries].reverse().map((entry) => {
               const hit = entry.rule.id === highlightedId;
               return (
                 <motion.li
                   key={entry.rule.id}
                   className={`memory-entry${hit ? " memory-entry-hit" : ""}`}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   layout
                 >
                   <span className="memory-label">{entry.rule.name}</span>
                   <span className="memory-summary">{entry.rule.reason}</span>
-                  <code>{entry.rule.id}</code>
-                  <small>
-                    Replay blocked · {entry.validation.legitimateFixturesTested} fixtures · 0 false positives
-                  </small>
+                  <span className="memory-meta">
+                    learned {runId ?? entry.rule.id.toLowerCase()}
+                  </span>
                 </motion.li>
               );
             })}
