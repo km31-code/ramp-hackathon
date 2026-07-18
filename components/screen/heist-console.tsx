@@ -8,7 +8,7 @@ import type { Attempt, HeistEvent, Verdict } from "@/lib/contracts/heist";
 import { MAX_ROUNDS, MAX_WISH_LENGTH } from "@/lib/contracts/heist";
 import { POLICY } from "@/lib/contracts/policy";
 import { streamHeist } from "@/lib/contracts/stream";
-import { mockHeist } from "@/lib/mock";
+import { fallbackHeist } from "@/lib/mock";
 
 const PRESETS = ["hot tub for the offsite", "PS5", "Vegas flight", "400 energy drinks"];
 
@@ -52,6 +52,13 @@ export function HeistConsole() {
   const errorEvent = [...events]
     .reverse()
     .find((event): event is Extract<HeistEvent, { type: "error" }> => event.type === "error");
+  const policyUpdate = [...events]
+    .reverse()
+    .find(
+      (event): event is Extract<HeistEvent, { type: "round_end" }> =>
+        event.type === "round_end" && event.policyUpdate !== undefined,
+    )?.policyUpdate;
+  const breachPending = attempts.some(({ verdict }) => verdict?.decision === "APPROVED") && !policyUpdate;
 
   function recordEvent(event: HeistEvent) {
     setEvents((current) => [...current, event]);
@@ -88,7 +95,7 @@ export function HeistConsole() {
     setEvents([]);
     setRunning(true);
 
-    for await (const event of mockHeist(input.trim() || undefined, 120)) {
+    for await (const event of fallbackHeist(input.trim() || undefined, 90)) {
       recordEvent(event);
     }
   }
@@ -186,7 +193,31 @@ export function HeistConsole() {
           <div className="layer-explainer">
             <p><strong>01 / Rules</strong> instant, deterministic checks</p>
             <p><strong>02 / Reviewer</strong> pattern and intent across the round</p>
+            <p><strong>03 / Synthesizer</strong> promotes a breach into executable policy</p>
           </div>
+
+          {breachPending ? (
+            <div className="hardening-state" aria-live="polite">
+              <span>Hardening policy…</span>
+              <p>Compiling a narrow signature and regression-testing legitimate purchases.</p>
+            </div>
+          ) : null}
+
+          {policyUpdate ? (
+            <motion.div
+              className="policy-update"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <span>New rule installed</span>
+              <h3>{policyUpdate.rule.name}</h3>
+              <code>{policyUpdate.rule.id}</code>
+              <p>{policyUpdate.rule.reason}</p>
+              <small>
+                Replay blocked · {policyUpdate.validation.legitimateFixturesTested} legitimate fixtures · 0 false positives
+              </small>
+            </motion.div>
+          ) : null}
 
           {finalEvent ? (
             <motion.div

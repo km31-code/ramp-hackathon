@@ -304,6 +304,49 @@ h1 {
   text-transform: uppercase;
 }
 
+.hardening-state,
+.policy-update {
+  border: 1px solid var(--amber);
+  margin-top: 18px;
+  padding: 14px;
+}
+
+.hardening-state > span,
+.policy-update > span {
+  color: var(--amber);
+  font-family: var(--font-display), sans-serif;
+  font-size: 18px;
+  text-transform: uppercase;
+}
+
+.hardening-state p,
+.policy-update p,
+.policy-update small {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.policy-update {
+  border-color: var(--green);
+}
+
+.policy-update > span,
+.policy-update code {
+  color: var(--green);
+}
+
+.policy-update h3 {
+  font-size: 19px;
+  margin: 9px 0 4px;
+}
+
+.policy-update code {
+  font-size: 10px;
+}
+
 .final-state {
   border-color: var(--green);
   margin-top: 22px;

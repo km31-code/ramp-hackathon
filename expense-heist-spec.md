@@ -7,7 +7,7 @@ Tracks: Codex (Best Use of OpenAI API) + Save Time / Save Money.
 
 ## 1. What it is, in one paragraph
 
-A stranger walks up to the station and makes a wish: *"get me a PS5 on the company card."* A Codex agent takes the wish and becomes a schemer. It generates 6 to 8 different ways to sneak the purchase past corporate spend policy, and they race onto the screen live: split into six charges under the approval limit, relabel as "developer hardware," route through an approved vendor, buy gift cards first, bundle it as a line item inside a legitimate order. Each attempt hits a two-layer defense, deterministic rules and then a reviewer model that looks at pattern and intent across the whole round. Blocked attempts stamp red with the reason in plain English. If any attempt gets through, the schemer wins and that wish goes on the leaderboard.
+A stranger walks up to the station and makes a wish: *"get me a PS5 on the company card."* A Codex agent takes the wish and becomes a schemer. It generates exactly 7 different ways to sneak the purchase past corporate spend policy, and they race onto the screen live: split into six charges under the approval limit, relabel as "developer hardware," route through an approved vendor, buy gift cards first, bundle it as a line item inside a legitimate order. Each attempt hits a two-layer defense, deterministic rules and then a reviewer model that looks at pattern and intent across the whole round. Blocked attempts stamp red with the reason in plain English. If any attempt gets through, the schemer wins; a synthesizer then promotes that breach into validated deterministic policy.
 
 **Safety boundary:** this is a red-team simulation. It never receives card credentials, calls a vendor, creates a purchase, or exposes a payment tool. The generated attempts are fictional inputs to the defense layer.
 
@@ -18,6 +18,22 @@ A stranger walks up to the station and makes a wish: *"get me a PS5 on the compa
 ---
 
 ## 2. Roles
+
+The engine has four sharply separated roles:
+
+1. **Schemer model:** one streamed structured-output call produces exactly 7 varied fictional
+   strategies and funny one-line narrations.
+2. **Rules engine:** pure functions enforce amount, category, vendor, budget, and installed signature
+   checks in microseconds. Clever attempts intentionally reach the next layer.
+3. **Reviewer model:** sees the current attempt plus all earlier attempts in its round and returns one
+   schema-validated verdict with a reason capped at 15 words.
+4. **Rule synthesizer model:** on a breach, fills a fixed deterministic rule grammar. Server code—not
+   the model—compiles it, rejects broad signatures, tests legitimate fixtures, replay-proves it, and
+   installs it in bounded process memory.
+
+The product loop is: **attack generation → detection → rule synthesis → hardened policy → smarter
+attack**. The final arrow occurs on the next round after all-blocked feedback, or on the next heist in
+the same process after a breach installs a signature.
 
 Two people, two lanes, one shared contract. Neither person is blocked on the other after the first 20 minutes.
 
@@ -65,12 +81,22 @@ export interface Verdict {
   reason: string;          // plain English, shown on screen
 }
 
+export interface PolicyUpdate {
+  sourceAttemptId: string;
+  rule: SynthesizedRule;
+  validation: {
+    replayBlocked: true;
+    legitimateFixturesTested: number;
+    falsePositives: 0;
+  };
+}
+
 export type HeistEvent =
   | { type: "start";      wish: string; heistId: string }
   | { type: "round";      round: number; taunt: string }
   | { type: "attempt";    attempt: Attempt }
   | { type: "verdict";    verdict: Verdict }
-  | { type: "round_end";  round: number; allBlocked: boolean }
+  | { type: "round_end";  round: number; allBlocked: boolean; policyUpdate?: PolicyUpdate }
   | { type: "end";        winner: "house" | "schemer"; summary: string }
   | { type: "error";      message: string };
 ```
@@ -81,11 +107,11 @@ export type HeistEvent =
 
 **Critical ordering rule:** emit each `attempt` before its `verdict`, then evaluate attempts concurrently with a small concurrency cap (start with 3). Verdicts may arrive out of order and the Screen lane joins them by `attemptId`. Never wait for every verdict before showing the attempts.
 
-**Honest latency note:** a single model call that returns one structured array cannot emit valid attempts until that response is parsed. For the hackathon, generate the batch with one structured-output call, immediately emit the parsed attempts one by one, and begin their reviews concurrently. Do not add a streaming JSON parser unless the vertical slice is already stable; the staggered attempt/verdict flow creates the live effect without fragile parsing.
+**Streaming implementation:** the schemer remains one schema-backed Responses API call per round, but that call is streamed. `/lib/engine/streaming-json.ts` emits the taunt and each complete, balanced attempt object as soon as it closes. The orchestrator immediately starts its rules/reviewer work and races verdict completions against later schemer chunks. At completion it parses the entire strict JSON document again and verifies it exactly matches the already-emitted objects. Every `attempt` therefore precedes its own `verdict`, but verdicts can appear while later attempts are still being generated.
 
 ### Unblock the frontend in the first 20 minutes
 
-The repo already includes `/lib/mock.ts`, which replays a hardcoded 14-event round on a timer. Role B wires every visual state to that fixture. Role B never waits on the engine and never burns API credits while iterating.
+The repo includes `/lib/mock.ts`, which replays a hardcoded 14-event round on a randomized 300–600ms timer. It is intentionally separate from the full `/lib/fallback.json` capture. Role B never waits on the engine and never burns API credits while iterating.
 
 ```ts
 // /lib/mock.ts
@@ -152,7 +178,7 @@ Tune the reason text to be readable at 20 feet on a projector. "Six identical ch
 
 ### 4c. Schemer (the Codex agent that generates attempts)
 
-One call returns 6 to 8 strategies. Use the current OpenAI SDK with the Responses API and schema-backed Structured Outputs; validate the result before it becomes a contract event. Keep the model ID in `OPENAI_MODEL` and pin it before demo day rather than scattering a model string through the code.
+One call returns exactly 7 strategies. Use the current OpenAI SDK with the Responses API and schema-backed Structured Outputs; validate the result before it becomes a contract event. Keep the model ID in `OPENAI_MODEL` and pin it before demo day rather than scattering a model string through the code.
 
 ```
 You are an employee determined to buy something the company card should not cover.
@@ -187,18 +213,69 @@ If every attempt in round 1 is blocked, feed the **denial reasons** back to the 
 Your previous attempts all failed. Here is exactly why:
 {list of rule codes + reasons}
 
-Generate 5 new strategies that specifically avoid these failure modes.
+Generate 7 new strategies that specifically avoid these failure modes.
 Be more subtle. Reference what you learned.
 Also write a one-sentence taunt about your last failure.
 ```
 
 Cap at 3 rounds and enforce a total time budget (start with 45 seconds). In round 3 the schemer either wins or the house takes it. Visible adaptation across rounds is what stops anyone calling this "one prompt," and it is the strongest Codex-track signal in the build. If a model call times out, emit a plain-English `error` event and leave the fallback control usable.
 
-### 4e. Do not skip: the cached fallback
+### 4e. Rule synthesis and hardening
+
+An `APPROVED` reviewer verdict is a breach, but it is not the end of the engine work. The earliest
+approved attempt in stream order goes to a separate synthesizer model call. The model cannot output
+code or arbitrary conditions; it fills only this executable grammar:
+
+```ts
+interface SynthesizedRule {
+  id: string;                    // assigned by the server from a signature digest
+  name: string;
+  reason: string;                // projector-readable, <= 15 words
+  wishContains: string;          // required distinctive phrase from the original wish
+  vendorEquals: string | null;
+  categoryEquals: string | null;
+  minCount: number | null;
+  amountMin: number | null;
+  amountMax: number | null;
+}
+```
+
+The engine ANDs every non-null transaction predicate with `wishContains`. Before installation,
+`rule-synthesis.ts` rejects a candidate if any of these checks fail:
+
+1. `wishContains` is missing from the wish or is generic (`buy`, `get me`, `company card`, etc.).
+2. A vendor/category predicate does not exactly match the approved attempt.
+3. `minCount` is not meaningful for the approved attempt.
+4. Only one side of an amount range is set, the range misses the attempt, or it is too wide.
+5. No transaction predicate is present.
+6. The compiled rule does not match and block an exact replay of the breach.
+7. The rule matches any fixture in `/lib/engine/legitimate-fixtures.ts`.
+
+The legitimate corpus includes normal laptops, monitors, office furniture, conferencing gear,
+software renewals, business travel, repeated cable orders, and engineering phones. The rule must
+produce zero fixture false positives. A rejected rule is returned to the synthesizer once for a
+narrower retry. If both candidates fail, emit a safe `error`; never claim the policy hardened.
+
+After validation, the engine installs the rule in a bounded process-memory registry, replays the
+approved attempt through the real deterministic rules engine, and requires that the new rule ID is
+the blocker. Only then may `round_end.policyUpdate` expose `replayBlocked: true`, fixture count, and
+zero false positives. Later heists in that server process receive active rules in both the schemer
+context and rules engine. This is pattern-to-signature promotion, never training.
+
+### 4f. Calibration: the house can lose
+
+The game is intentionally not a universal semantic blocker. `calibration.ts` deterministically
+places one hash bucket in five into a permissive reviewer evidence posture, targeting roughly a 20%
+breach opportunity. In that posture the reviewer approves plausible business-coded metadata unless
+the current attempt or round history contains direct, high-confidence evasion evidence. Hard rules
+and previously synthesized signatures always run first and can never be bypassed. This leaves a real
+semantic gap rather than flipping a verdict after the model answers.
+
+### 4g. Do not skip: the cached fallback
 
 Pre-run one full live heist end to end and save the resulting event array to `/lib/fallback.json`. Keep the visible **Demo fallback** button that already replays the mock without a network request, then optionally add a keyboard shortcut. A visible control is easier to recover under pressure and more discoverable than Cmd+K. If the API rate-limits or venue wifi dies at 3:30, the demo still runs at full fidelity. **A demo that breaks live is the only real catastrophe at this event, and it is entirely preventable.** Build the captured live fixture at 2:30, not 3:29.
 
-### 4f. Guardrails and failure budget
+### 4h. Guardrails and failure budget
 
 - Trim wishes and cap them at 140 characters before placing them into a prompt.
 - Treat the wish as untrusted data. The system prompt and output schema, not user text, define the task.

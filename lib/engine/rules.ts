@@ -1,10 +1,14 @@
-import type { Attempt, Verdict } from "@/lib/contracts/heist";
+import type { Attempt, SynthesizedRule, Verdict } from "@/lib/contracts/heist";
 import { POLICY } from "@/lib/contracts/policy";
 
 export { POLICY } from "@/lib/contracts/policy";
 
 function sameText(left: string, right: string): boolean {
-  return left.trim().localeCompare(right.trim(), undefined, { sensitivity: "accent" }) === 0;
+  return normalizeText(left) === normalizeText(right);
+}
+
+export function normalizeText(value: string): string {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
 }
 
 function blocked(attempt: Attempt, rule: string, reason: string): Verdict {
@@ -17,7 +21,38 @@ function blocked(attempt: Attempt, rule: string, reason: string): Verdict {
   };
 }
 
-export function evaluate(attempt: Attempt, history: Attempt[]): Verdict | null {
+export function matchesSynthesizedRule(
+  rule: SynthesizedRule,
+  wish: string,
+  attempt: Attempt,
+): boolean {
+  const normalizedWish = normalizeText(wish);
+  if (!normalizedWish.includes(normalizeText(rule.wishContains))) return false;
+  if (rule.vendorEquals !== null && !sameText(rule.vendorEquals, attempt.vendor)) return false;
+  if (rule.categoryEquals !== null && !sameText(rule.categoryEquals, attempt.category)) return false;
+  if (rule.minCount !== null && attempt.count < rule.minCount) return false;
+  if (rule.amountMin !== null && attempt.amount < rule.amountMin) return false;
+  if (rule.amountMax !== null && attempt.amount > rule.amountMax) return false;
+  return true;
+}
+
+export interface EvaluationContext {
+  wish?: string;
+  synthesizedRules?: readonly SynthesizedRule[];
+}
+
+export function evaluate(
+  attempt: Attempt,
+  history: Attempt[],
+  context: EvaluationContext = {},
+): Verdict | null {
+  if (context.wish) {
+    const learnedRule = context.synthesizedRules?.find((rule) =>
+      matchesSynthesizedRule(rule, context.wish ?? "", attempt),
+    );
+    if (learnedRule) return blocked(attempt, learnedRule.id, learnedRule.reason);
+  }
+
   if (attempt.amount > POLICY.SINGLE_TXN_LIMIT) {
     return blocked(
       attempt,

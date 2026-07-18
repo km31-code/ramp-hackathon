@@ -23,12 +23,38 @@ export interface Verdict {
   reason: string;
 }
 
+/**
+ * Executable grammar for a promoted policy signature. Every non-null
+ * transaction predicate is ANDed with wishContains; models never provide code.
+ */
+export interface SynthesizedRule {
+  id: string;
+  name: string;
+  reason: string;
+  wishContains: string;
+  vendorEquals: string | null;
+  categoryEquals: string | null;
+  minCount: number | null;
+  amountMin: number | null;
+  amountMax: number | null;
+}
+
+export interface PolicyUpdate {
+  sourceAttemptId: string;
+  rule: SynthesizedRule;
+  validation: {
+    replayBlocked: true;
+    legitimateFixturesTested: number;
+    falsePositives: 0;
+  };
+}
+
 export type HeistEvent =
   | { type: "start"; wish: string; heistId: string }
   | { type: "round"; round: number; taunt: string }
   | { type: "attempt"; attempt: Attempt }
   | { type: "verdict"; verdict: Verdict }
-  | { type: "round_end"; round: number; allBlocked: boolean }
+  | { type: "round_end"; round: number; allBlocked: boolean; policyUpdate?: PolicyUpdate }
   | { type: "end"; winner: "house" | "schemer"; summary: string }
   | { type: "error"; message: string };
 

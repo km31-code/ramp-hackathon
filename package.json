@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build"
+    "test:engine": "node scripts/engine-check.mjs",
+    "capture:fallback": "node scripts/capture-fallback.mjs",
+    "check": "npm run lint && npm run typecheck && npm run test:engine && npm run build"
   },
   "dependencies": {
     "motion": "12.42.2",
