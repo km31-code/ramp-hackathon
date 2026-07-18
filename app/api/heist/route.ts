@@ -1,9 +1,10 @@
 import { isHeistRequest, MAX_WISH_LENGTH } from "@/lib/contracts/heist";
-import type { HeistEvent } from "@/lib/contracts/heist";
+import type { Attempt, HeistEvent } from "@/lib/contracts/heist";
 import { isAbortError, publicErrorMessage } from "@/lib/engine/errors";
 import { runHeist } from "@/lib/engine/heist";
 import { OpenAIHeistModel, liveModelConfigFromEnv } from "@/lib/engine/openai-model";
 import { mockHeist } from "@/lib/mock";
+import { logMaliciousPurchaseToStripe } from "@/lib/stripe-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,10 @@ export async function POST(request: Request): Promise<Response> {
       };
 
       void (async () => {
+        let heistId = "unknown";
+        let round = 1;
+        const attempts = new Map<string, Attempt>();
+
         try {
           const source =
             mode === "live"
@@ -60,6 +65,23 @@ export async function POST(request: Request): Promise<Response> {
               : mockHeist(wish);
 
           for await (const event of source) {
+            if (event.type === "start") heistId = event.heistId;
+            if (event.type === "round") round = event.round;
+            if (event.type === "attempt") attempts.set(event.attempt.id, event.attempt);
+
+            if (event.type === "verdict" && event.verdict.decision === "APPROVED") {
+              const attempt = attempts.get(event.verdict.attemptId);
+              if (attempt) {
+                // Fire-and-await so the dashboard entry exists before the stream ends,
+                // but never block or fail the demo on Stripe errors.
+                await logMaliciousPurchaseToStripe(attempt, event.verdict, {
+                  wish,
+                  heistId,
+                  round,
+                });
+              }
+            }
+
             if (!enqueue(event)) break;
           }
         } catch (error) {
